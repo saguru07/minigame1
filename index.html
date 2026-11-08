@@ -3,42 +3,31 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Minigame Cocokkan Warna</title>
+<title>Minigame Cincin Warna</title>
 <style>
-  :root{
-    --bg:#10161c; --panel:#18222b; --ink:#e8eef3; --muted:#8a9aa8; --line:#2a3945; --ok:#4fd18b; --bad:#ff6b5e;
-  }
+  :root{--bg:#14171b;--board:#0b2230;--ink:#e8eef3;--muted:#8a9aa8;--ok:#4fd18b;--bad:#ff6b5e;--timer:#ff4d00}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
-  body{
-    background:var(--bg); color:var(--ink);
-    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:16px;
-  }
-  h1{font-size:1.25rem;margin:0;font-weight:700;letter-spacing:.2px}
-  .help{margin:0;color:var(--muted);font-size:.9rem;text-align:center;max-width:440px;line-height:1.5}
+  html,body{margin:0;min-height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;min-height:100vh}
+  h1{font-size:1.2rem;margin:0}
+  .help{margin:0;color:var(--muted);font-size:.88rem;text-align:center;max-width:460px;line-height:1.5}
   .stats{display:flex;gap:18px;font-variant-numeric:tabular-nums;font-size:.95rem}
-  .stats b{color:var(--ink)} .stats span{color:var(--muted)}
-  .stage{position:relative;width:min(92vw,420px);aspect-ratio:1}
+  .stats span{color:var(--muted)}
+  .stage{position:relative;width:min(94vw,520px);aspect-ratio:1;background:var(--board)}
   canvas{width:100%;height:100%;display:block}
-  .bar{width:min(92vw,420px);height:8px;background:var(--panel);border-radius:4px;overflow:hidden}
-  .bar i{display:block;height:100%;width:100%;background:var(--ok);transform-origin:left}
-  .status{min-height:1.4em;font-size:.95rem;color:var(--muted)}
-  .overlay{
-    position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
-    gap:10px;text-align:center;padding:28px;background:rgba(16,22,28,.93);border-radius:50%;
-  }
+  .bar{width:min(94vw,520px);height:8px;background:#242b33;margin-top:-12px}
+  .bar i{display:block;height:100%;width:100%;background:var(--timer);transform-origin:left}
+  .overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:8px;text-align:center;padding:28px;background:rgba(11,34,48,.94)}
   .overlay.show{display:flex}
-  .overlay h2{margin:0;font-size:1.3rem}
-  .overlay p{margin:0;color:var(--muted);font-size:.9rem;line-height:1.5}
+  .overlay h2{margin:0;font-size:1.35rem}
+  .overlay p{margin:4px 0;color:#b9c7d2;font-size:.95rem;line-height:1.5}
   .overlay.win h2{color:var(--ok)} .overlay.lose h2{color:var(--bad)}
-  button{
-    font:inherit;font-weight:700;color:#0b1015;background:var(--ink);border:0;border-radius:8px;
-    padding:10px 20px;cursor:pointer;margin-top:6px
-  }
+  button{font:inherit;font-weight:700;color:#0b1015;background:var(--ink);border:0;border-radius:6px;padding:10px 20px;cursor:pointer;margin-top:8px}
   button:focus-visible{outline:3px solid var(--ok);outline-offset:2px}
   .touch{display:none;gap:10px}
-  .touch button{background:var(--panel);color:var(--ink);border:1px solid var(--line);margin:0;min-width:84px;user-select:none;touch-action:none}
+  .touch button{background:#1d2933;color:var(--ink);border:1px solid #33444f;margin:0;min-width:84px;user-select:none;touch-action:none}
   @media (pointer:coarse){.touch{display:flex}}
 </style>
 </head>
@@ -46,15 +35,14 @@
 
 <h1 id="title"></h1>
 <p class="help" id="help"></p>
-
 <div class="stats">
-  <div><span>Kunci</span> <b id="sLock">0/0</b></div>
+  <div><span>Cincin</span> <b id="sRing">0/0</b></div>
   <div><span>Waktu</span> <b id="sTime">0.00</b></div>
   <div><span>Terbaik</span> <b id="sBest">-</b></div>
 </div>
 
 <div class="stage">
-  <canvas id="cv" width="840" height="840"></canvas>
+  <canvas id="cv" width="1040" height="1040"></canvas>
   <div class="overlay" id="overlay" role="alertdialog" aria-live="assertive">
     <h2 id="oTitle"></h2>
     <div id="oBody"></div>
@@ -62,7 +50,6 @@
   </div>
 </div>
 <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
-<div class="status" id="status" aria-live="polite"></div>
 
 <div class="touch">
   <button id="tL">&larr;</button>
@@ -75,112 +62,188 @@
    PENGATURAN — ubah bagian ini saja untuk menyesuaikan game & teks
    ===================================================================== */
 const CONFIG = {
-  // Teks halaman
-  title: "Minigame Cocokkan Warna",
-  help:  "Putar lingkaran titik dengan ← → (atau A / D) sampai titik di posisi atas sama warnanya dengan cincin luar. Tekan ENTER untuk konfirmasi. Tekan R untuk mulai ulang.",
+  title: "Minigame Cincin Warna",
+  help:  "Putar cincin yang aktif dengan ← → (atau A / D) sampai setiap titik berada di blok warna yang sama. Tekan ENTER untuk konfirmasi, lalu lanjut ke cincin berikutnya. Tekan R untuk mulai ulang.",
   startButton: "Mulai",
 
   // Aturan game
-  locks: 5,              // jumlah kunci yang harus dibuka
-  secondsPerLock: 10,    // batas waktu tiap kunci (detik)
-  dotCount: 6,           // jumlah titik (maks sesuai jumlah warna di bawah)
-  rotateSpeed: 150,      // kecepatan putar (derajat/detik)
-  tolerance: 14,         // toleransi sejajar (derajat) — makin kecil makin sulit
-  colors: ["#ff5d5d", "#ffb347", "#f6e05e", "#4fd18b", "#4da3ff", "#b57cff"],
+  dotsPerRing: [3, 4, 5, 6, 6],   // dari cincin terkecil ke terbesar (panjang array = jumlah cincin)
+  totalSeconds: 30,               // batas waktu seluruh permainan
+  failOnWrong: true,              // true: ENTER salah = gagal. false: hanya getar, boleh coba lagi
+  colors: ["#ffc107", "#2196f3", "#d81b60"],
+
+  // Papan & pengacakan (semuanya diacak ulang setiap game dimulai)
+  spokes: 12,             // jumlah garis keluar (spoke). Titik & blok warna selalu menempel di garis ini
+  stepDelayFirst: 220,    // jeda (ms) sebelum putaran berulang saat tombol ditahan
+  stepDelayRepeat: 80,    // kecepatan putaran berulang (ms per langkah)
+  maxCoverage: 0.55,      // maks bagian cincin yang boleh tertutup blok warna (0.55 = sisanya selalu kosong)
+  extendChance: 0.2,      // peluang blok warna memanjang ke garis kosong di sebelahnya
+  startPickTop: 0.25,     // 0.1 = posisi awal selalu yang terjauh dari tujuan, 1 = acak penuh
 
   // Teks saat BERHASIL — susun sendiri.
-  // Tiap item array = satu baris/paragraf. Boleh pakai HTML sederhana (<b>, <a>, <br>).
+  // Tiap item array = satu paragraf. Boleh HTML sederhana (<b>, <a>, <br>). {time} = waktu total.
   successTitle: "Akses Terbuka!",
   successLines: [
-    "Selamat, semua kunci berhasil dibuka.",
+    "Selamat, semua cincin berhasil disusun.",
     "Kode rahasiamu: <b>ABC-1234</b>",
-    "Selesai dalam {time} detik."        // {time} akan diganti waktu total
+    "Selesai dalam {time} detik."
   ],
   successButton: "Main lagi",
-  successRedirect: "",   // isi URL (mis. "https://situsmu.com/hadiah") untuk pindah halaman otomatis
-  successDelayMs: 2500,  // jeda sebelum pindah halaman
+  successRedirect: "",    // isi URL untuk pindah halaman otomatis setelah menang
+  successDelayMs: 2500,
 
   // Teks saat GAGAL
   failTitle: "Gagal",
   failTimeout: "Waktu habis.",
-  failWrong:   "Warna tidak cocok.",
-  failMisalign:"Titik belum sejajar di posisi atas.",
+  failWrong: "Masih ada titik yang belum berada di blok warna yang sama.",
   failButton: "Coba lagi",
 
-  // Hook opsional: dipanggil saat berhasil (mis. kirim data ke server-mu)
-  onSuccess(totalSeconds){ /* contoh: fetch('/api/win',{method:'POST'}) */ }
+  // Dipanggil saat berhasil (mis. kirim ke server-mu)
+  onSuccess(totalSeconds){ }
 };
 /* ===================================================================== */
 
 const $ = id => document.getElementById(id);
 const cv = $("cv"), ctx = cv.getContext("2d");
-const W = cv.width, C = W/2;
-const TAU = Math.PI*2, TOP = -Math.PI/2;
+const W = cv.width, C = W/2, TAU = Math.PI*2;
+const S = CONFIG.spokes, STEP = TAU/S;
+const RINGS = CONFIG.dotsPerRing.length;
+const R_OUT = C-70, R_STEP = R_OUT/RINGS;
+const DOT_R = 15;
+const BLOCK_OFF = 30;  // jarak blok warna dari jalur titik (px)
+const BLOCK_W = 10;    // tebal blok warna
+const BLOCK_GAP = 6;   // celah antar blok yang bersebelahan (px)
 
 $("title").textContent = CONFIG.title;
 document.title = CONFIG.title;
 $("help").textContent = CONFIG.help;
 
-let state = "idle";            // idle | playing | over
-let lockIdx = 0, rot = 0, target = null, dots = [];
-let lockStart = 0, totalStart = 0, flash = null;
+let state = "idle", rings = [], cur = 0, startT = 0, flash = null, shake = 0;
+let dir = 0, lastDir = 0, nextStep = 0;
 let keys = {left:false,right:false};
-let best = Number(localStorage.getItem("mg_best") || 0) || null;
+let best = Number(localStorage.getItem("mg_best3")||0) || null;
 if (best) $("sBest").textContent = best.toFixed(2);
 
-function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]} return a; }
+const mod = a => ((a % S) + S) % S;
+const rndInt = n => Math.floor(Math.random()*n);
+const pick = a => a[rndInt(a.length)];
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=rndInt(i+1);[a[i],a[j]]=[a[j],a[i]]} return a; }
 
-function newLock(){
-  const n = Math.min(CONFIG.dotCount, CONFIG.colors.length);
-  dots = shuffle(CONFIG.colors.slice(0,n));
-  target = dots[Math.floor(Math.random()*n)];
-  rot = Math.random()*TAU;
-  lockStart = performance.now();
-  $("sLock").textContent = `${lockIdx+1}/${CONFIG.locks}`;
-  $("status").textContent = "";
+/* Blok warna = deretan slot spoke berurutan dengan warna sama (otomatis digabung jadi satu) */
+function runsOf(own){
+  if (own.every(c => c && c === own[0])) return [{color:own[0], s:0, len:S, full:true}];
+  const start = own.findIndex((c,i) => c !== own[mod(i-1)]);
+  if (start < 0) return [];
+  const res = [];
+  let i = 0;
+  while (i < S){
+    const idx = mod(start+i), c = own[idx];
+    let len = 1;
+    while (i+len < S && own[mod(start+i+len)] === c) len++;
+    if (c) res.push({color:c, s:idx, len});
+    i += len;
+  }
+  return res;
+}
+
+function ringSolved(r){
+  return r.dots.every(d => r.own[mod(d.slot + r.pos)] === d.color);
+}
+
+function slotDist(own, x, color){
+  let m = S;
+  for (let y=0;y<S;y++) if (own[y]===color){ const d=Math.abs(x-y); m=Math.min(m,d,S-d); }
+  return m;
+}
+
+function buildRing(k){
+  const cap = Math.max(2, Math.floor(S*CONFIG.maxCoverage));   // maks slot yang boleh berwarna
+  const n = Math.min(CONFIG.dotsPerRing[k], cap);
+  const r = {rad:R_STEP*(k+1), pos:0, vis:0, dots:[], own:Array(S).fill(null), done:false};
+  const solvedPos = rndInt(S);
+
+  // warna titik acak (minimal 2 warna berbeda), di slot spoke acak
+  let cols;
+  do { cols = Array.from({length:n}, () => pick(CONFIG.colors)); }
+  while (new Set(cols).size < Math.min(2, CONFIG.colors.length));
+  const slots = shuffle([...Array(S).keys()]).slice(0,n);
+  slots.forEach((s,i) => r.dots.push({slot:s, color:cols[i]}));
+
+  // klaim slot tujuan tiap titik
+  const own = r.own;
+  r.dots.forEach(d => own[mod(d.slot+solvedPos)] = d.color);
+
+  // pastikan tiap blok minimal 2 slot (panjang > 0), blok sendirian diperpanjang atau digabung
+  for (let guard=0; guard<200; guard++){
+    const single = runsOf(own).find(u => u.len===1 && !u.full);
+    if (!single) break;
+    const a = single.s, L = mod(a-1), R = mod(a+1);
+    if (own[L]===null && own[R]===null) own[Math.random()<.5?L:R] = single.color;
+    else if (own[L]===null) own[L] = single.color;
+    else if (own[R]===null) own[R] = single.color;
+    else {
+      const nc = own[L];
+      r.dots.forEach(d => { if (mod(d.slot+solvedPos)===a) d.color = nc; });
+      own[a] = nc;
+    }
+  }
+
+  // blok memanjang acak (sewarna jadi satu blok panjang)
+  for (let t=0; t<S; t++){
+    const a = rndInt(S);
+    if (!own[a]) continue;
+    const dd = Math.random()<.5 ? 1 : -1, b = mod(a+dd);
+    if (own.filter(Boolean).length >= cap) break;
+    if (own[b]===null && Math.random()<CONFIG.extendChance) own[b] = own[a];
+  }
+
+  // posisi awal: pilih dari posisi yang titiknya paling jauh dari blok warna tujuannya
+  const cand = [];
+  for (let p=0;p<S;p++){
+    r.pos = p;
+    if (ringSolved(r)) continue;
+    const ds = r.dots.map(d => slotDist(own, mod(d.slot+p), d.color));
+    cand.push({p, score: Math.min(...ds) + 0.5*(ds.reduce((s,x)=>s+x,0)/ds.length)});
+  }
+  if (!cand.length) return buildRing(k); // jarang: semua posisi benar, buat ulang cincin
+  cand.sort((x,y) => y.score-x.score);
+  const top = Math.max(1, Math.ceil(cand.length*CONFIG.startPickTop));
+  r.pos = cand[rndInt(top)].p;
+  r.vis = r.pos*STEP;
+  return r;
 }
 
 function start(){
   $("overlay").classList.remove("show");
-  lockIdx = 0; state = "playing";
-  totalStart = performance.now();
-  newLock();
+  rings = CONFIG.dotsPerRing.map((_,k) => buildRing(k));
+  cur = 0; state = "playing"; startT = performance.now(); lastDir = 0;
+  $("sRing").textContent = `1/${RINGS}`;
 }
 
-function dotAngle(i){ return rot + i*TAU/dots.length; }
-function norm(a){ a%=TAU; if(a>Math.PI)a-=TAU; if(a<-Math.PI)a+=TAU; return a; }
-
-function confirmPick(){
-  if (state !== "playing") return;
-  // cari titik terdekat dengan penanda di atas
-  let bi=-1, bd=Infinity;
-  for(let i=0;i<dots.length;i++){
-    const d = Math.abs(norm(dotAngle(i)-TOP));
-    if(d<bd){bd=d;bi=i}
-  }
-  const tol = CONFIG.tolerance*Math.PI/180;
-  if (bd > tol) return end(false, CONFIG.failMisalign);
-  if (dots[bi] !== target) return end(false, CONFIG.failWrong);
-
-  flash = {t:performance.now(), ok:true};
-  lockIdx++;
-  if (lockIdx >= CONFIG.locks) return end(true);
-  newLock();
+function confirmRing(){
+  if (state!=="playing") return;
+  if (ringSolved(rings[cur])){
+    flash = {t:performance.now(), k:cur};
+    rings[cur].done = true;
+    cur++;
+    if (cur>=RINGS) return end(true);
+    $("sRing").textContent = `${cur+1}/${RINGS}`;
+  } else if (CONFIG.failOnWrong){
+    end(false, CONFIG.failWrong);
+  } else shake = performance.now();
 }
 
 function end(win, reason){
   state = "over";
-  const total = (performance.now()-totalStart)/1000;
-  const ov = $("overlay");
-  ov.className = "overlay show " + (win ? "win":"lose");
+  const total = (performance.now()-startT)/1000;
+  $("overlay").className = "overlay show "+(win?"win":"lose");
   if (win){
     $("oTitle").textContent = CONFIG.successTitle;
-    $("oBody").innerHTML = CONFIG.successLines
-      .map(l => `<p>${l.replace("{time}", total.toFixed(2))}</p>`).join("");
+    $("oBody").innerHTML = CONFIG.successLines.map(l=>`<p>${l.replace("{time}",total.toFixed(2))}</p>`).join("");
     $("oBtn").textContent = CONFIG.successButton;
-    if (!best || total < best){ best = total; localStorage.setItem("mg_best", total); $("sBest").textContent = total.toFixed(2); }
-    try { CONFIG.onSuccess(total); } catch(e){ console.error(e); }
-    if (CONFIG.successRedirect) setTimeout(()=>{ location.href = CONFIG.successRedirect; }, CONFIG.successDelayMs);
+    if(!best||total<best){best=total;localStorage.setItem("mg_best3",total);$("sBest").textContent=total.toFixed(2);}
+    try{CONFIG.onSuccess(total);}catch(e){console.error(e);}
+    if (CONFIG.successRedirect) setTimeout(()=>{location.href=CONFIG.successRedirect;},CONFIG.successDelayMs);
   } else {
     $("oTitle").textContent = CONFIG.failTitle;
     $("oBody").innerHTML = `<p>${reason}</p>`;
@@ -188,96 +251,109 @@ function end(win, reason){
   }
   $("oBtn").focus();
 }
-
 $("oBtn").addEventListener("click", start);
 
-/* ---------- input ---------- */
 addEventListener("keydown", e=>{
   const k = e.key.toLowerCase();
-  if (k==="arrowleft"||k==="a") keys.left = true;
-  else if (k==="arrowright"||k==="d") keys.right = true;
-  else if (k==="enter" && state==="playing"){ e.preventDefault(); confirmPick(); }
+  if (k==="arrowleft"||k==="a") keys.left=true;
+  else if (k==="arrowright"||k==="d") keys.right=true;
+  else if (k==="enter" && state==="playing"){ e.preventDefault(); confirmRing(); }
   else if (k==="r") start();
 });
 addEventListener("keyup", e=>{
   const k = e.key.toLowerCase();
-  if (k==="arrowleft"||k==="a") keys.left = false;
-  if (k==="arrowright"||k==="d") keys.right = false;
+  if (k==="arrowleft"||k==="a") keys.left=false;
+  if (k==="arrowright"||k==="d") keys.right=false;
 });
-function hold(id, side){
-  const b = $(id);
-  b.addEventListener("pointerdown", e=>{ e.preventDefault(); keys[side]=true; });
+function hold(id,side){
+  const b=$(id);
+  b.addEventListener("pointerdown",e=>{e.preventDefault();keys[side]=true;});
   ["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,()=>keys[side]=false));
 }
 hold("tL","left"); hold("tR","right");
-$("tOk").addEventListener("click", confirmPick);
+$("tOk").addEventListener("click", confirmRing);
 
 /* ---------- gambar ---------- */
-function draw(){
+function draw(now){
   ctx.clearRect(0,0,W,W);
-  const R = C-24;
+  ctx.save();
+  if (shake && now-shake<250) ctx.translate(Math.sin(now/15)*8,0); else shake=0;
 
-  // cincin luar = warna target
-  ctx.lineWidth = 34;
-  ctx.strokeStyle = state==="idle" ? "#2a3945" : target;
-  ctx.beginPath(); ctx.arc(C,C,R-17,0,TAU); ctx.stroke();
-
-  // piringan dalam
-  ctx.fillStyle = "#18222b";
-  ctx.beginPath(); ctx.arc(C,C,R-44,0,TAU); ctx.fill();
-  ctx.strokeStyle = "#2a3945"; ctx.lineWidth = 2; ctx.stroke();
-
-  // titik-titik
-  const orbit = R-110;
-  for(let i=0;i<dots.length;i++){
-    const a = dotAngle(i);
-    const x = C+Math.cos(a)*orbit, y = C+Math.sin(a)*orbit;
-    ctx.fillStyle = dots[i];
-    ctx.beginPath(); ctx.arc(x,y,30,0,TAU); ctx.fill();
+  // garis keluar (spoke)
+  ctx.strokeStyle="rgba(255,255,255,.28)"; ctx.lineWidth=2;
+  for(let i=0;i<S;i++){
+    const a=i*STEP;
+    ctx.beginPath(); ctx.moveTo(C,C); ctx.lineTo(C+Math.cos(a)*(R_OUT+30),C+Math.sin(a)*(R_OUT+30)); ctx.stroke();
   }
 
-  // penanda posisi atas
-  ctx.fillStyle = "#e8eef3";
-  ctx.beginPath();
-  ctx.moveTo(C, C-orbit-48); ctx.lineTo(C-13, C-orbit-72); ctx.lineTo(C+13, C-orbit-72);
-  ctx.closePath(); ctx.fill();
+  rings.forEach((r,k)=>{
+    const active = state==="playing" && k===cur;
+    // blok warna: berada di luar titik (tidak menyentuh), dan setiap slot spoke
+    // dicakup tepat di tengahnya, jadi blok & titik yang cocok selalu sejajar di spoke yang sama
+    const br = r.rad + BLOCK_OFF, gap = BLOCK_GAP/br;
+    ctx.lineWidth = BLOCK_W; ctx.lineCap = "butt";
+    runsOf(r.own).forEach(u=>{
+      ctx.strokeStyle = u.color;
+      ctx.beginPath();
+      if (u.full) ctx.arc(C,C,br,0,TAU);
+      else ctx.arc(C,C,br,(u.s-0.5)*STEP+gap,(u.s+u.len-0.5)*STEP-gap);
+      ctx.stroke();
+    });
 
-  // kilatan sukses tiap kunci
+    // garis cincin
+    ctx.lineWidth = active?4:2.5;
+    ctx.strokeStyle = r.done ? "#4fd18b" : (active ? "#ffffff" : "rgba(255,255,255,.55)");
+    ctx.beginPath(); ctx.arc(C,C,r.rad,0,TAU); ctx.stroke();
+
+    // titik (ada garis tepi gelap supaya tetap terlihat di atas blok sewarna)
+    r.dots.forEach(d=>{
+      const a = d.slot*STEP + r.vis;
+      ctx.fillStyle = d.color;
+      ctx.beginPath(); ctx.arc(C+Math.cos(a)*r.rad,C+Math.sin(a)*r.rad,active?DOT_R+2:DOT_R,0,TAU); ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = active ? "#fff" : "#0b2230"; ctx.stroke();
+    });
+  });
+
   if (flash){
-    const p = (performance.now()-flash.t)/350;
-    if (p>=1) flash=null; else {
-      ctx.strokeStyle = `rgba(79,209,139,${1-p})`; ctx.lineWidth = 8;
-      ctx.beginPath(); ctx.arc(C,C,R+ p*10,0,TAU); ctx.stroke();
+    const p=(now-flash.t)/400;
+    if(p>=1) flash=null; else {
+      ctx.strokeStyle=`rgba(79,209,139,${1-p})`; ctx.lineWidth=10;
+      ctx.beginPath(); ctx.arc(C,C,rings[flash.k].rad+p*30,0,TAU); ctx.stroke();
     }
   }
+  ctx.restore();
 }
 
-let last = performance.now();
+let last=performance.now();
 function loop(now){
-  const dt = Math.min(0.05,(now-last)/1000); last = now;
+  const dt=Math.min(.05,(now-last)/1000); last=now;
   if (state==="playing"){
-    const dir = (keys.right?1:0)-(keys.left?1:0);
-    rot += dir*CONFIG.rotateSpeed*Math.PI/180*dt;
-
-    const left = CONFIG.secondsPerLock - (now-lockStart)/1000;
-    const frac = Math.max(0,left/CONFIG.secondsPerLock);
-    const bar = $("barFill");
-    bar.style.transform = `scaleX(${frac})`;
-    bar.style.background = frac<.3 ? "var(--bad)" : "var(--ok)";
-    $("sTime").textContent = ((now-totalStart)/1000).toFixed(2);
-    if (left<=0) end(false, CONFIG.failTimeout);
+    dir = (keys.right?1:0)-(keys.left?1:0);
+    const r = rings[cur];
+    if (dir!==lastDir){
+      lastDir = dir;
+      if (dir){ r.pos += dir; nextStep = now + CONFIG.stepDelayFirst; }
+    } else if (dir && now>=nextStep){
+      r.pos += dir; nextStep = now + CONFIG.stepDelayRepeat;
+    }
+    const el=(now-startT)/1000, frac=Math.max(0,1-el/CONFIG.totalSeconds);
+    $("barFill").style.transform=`scaleX(${frac})`;
+    $("sTime").textContent=el.toFixed(2);
+    if (frac<=0) end(false, CONFIG.failTimeout);
   }
-  draw();
+  // putaran halus menuju posisi spoke berikutnya
+  rings.forEach(r => { r.vis += (r.pos*STEP - r.vis)*Math.min(1, dt*20); });
+  draw(now);
   requestAnimationFrame(loop);
 }
 
-// layar awal
 (function init(){
-  $("overlay").className = "overlay show";
-  $("oTitle").textContent = CONFIG.title;
-  $("oBody").innerHTML = "<p>Siap?</p>";
-  $("oBtn").textContent = CONFIG.startButton;
-  $("sLock").textContent = `0/${CONFIG.locks}`;
+  rings = CONFIG.dotsPerRing.map((_,k) => buildRing(k));
+  $("overlay").className="overlay show";
+  $("oTitle").textContent=CONFIG.title;
+  $("oBody").innerHTML="<p>Siap?</p>";
+  $("oBtn").textContent=CONFIG.startButton;
+  $("sRing").textContent=`0/${RINGS}`;
   requestAnimationFrame(loop);
 })();
 </script>
