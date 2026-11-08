@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Minigame Cincin Warna</title>
+<title>Color Rings</title>
 <style>
   :root{--bg:#14171b;--board:#0b2230;--ink:#e8eef3;--muted:#8a9aa8;--ok:#4fd18b;--bad:#ff6b5e;--timer:#ff4d00}
   *{box-sizing:border-box}
@@ -22,6 +22,7 @@
     gap:8px;text-align:center;padding:28px;background:rgba(11,34,48,.94)}
   .overlay.show{display:flex}
   .overlay h2{margin:0;font-size:1.35rem}
+  .overlay h2:empty{display:none}
   .overlay p{margin:4px 0;color:#b9c7d2;font-size:.95rem;line-height:1.5}
   .overlay.win h2{color:var(--ok)} .overlay.lose h2{color:var(--bad)}
   button{font:inherit;font-weight:700;color:#0b1015;background:var(--ink);border:0;border-radius:6px;padding:10px 20px;cursor:pointer;margin-top:8px}
@@ -33,12 +34,9 @@
 </head>
 <body>
 
-<h1 id="title"></h1>
 <p class="help" id="help"></p>
 <div class="stats">
-  <div><span>Cincin</span> <b id="sRing">0/0</b></div>
-  <div><span>Waktu</span> <b id="sTime">0.00</b></div>
-  <div><span>Terbaik</span> <b id="sBest">-</b></div>
+  <div><span>Time</span> <b id="sTime">0.00</b></div>
 </div>
 
 <div class="stage">
@@ -53,7 +51,7 @@
 
 <div class="touch">
   <button id="tL">&larr;</button>
-  <button id="tOk">Konfirmasi</button>
+  <button id="tOk">Confirm</button>
   <button id="tR">&rarr;</button>
 </div>
 
@@ -62,9 +60,8 @@
    PENGATURAN — ubah bagian ini saja untuk menyesuaikan game & teks
    ===================================================================== */
 const CONFIG = {
-  title: "Minigame Cincin Warna",
-  help:  "Putar cincin yang aktif dengan ← → (atau A / D) sampai setiap titik berada di blok warna yang sama. Tekan ENTER untuk konfirmasi, lalu lanjut ke cincin berikutnya. Tekan R untuk mulai ulang.",
-  startButton: "Mulai",
+  help:  "Rotate the active ring with ← → (or A / D) until every dot sits under a block of the same color. Press ENTER to confirm and move on to the next ring. Press R to restart.",
+  startButton: "Start",
 
   // Aturan game
   dotsPerRing: [3, 4, 5, 6, 6],   // dari cincin terkecil ke terbesar (panjang array = jumlah cincin)
@@ -82,21 +79,21 @@ const CONFIG = {
 
   // Teks saat BERHASIL — susun sendiri.
   // Tiap item array = satu paragraf. Boleh HTML sederhana (<b>, <a>, <br>). {time} = waktu total.
-  successTitle: "Akses Terbuka!",
+  successTitle: "Access Granted!",
   successLines: [
-    "Selamat, semua cincin berhasil disusun.",
-    "Kode rahasiamu: <b>ABC-1234</b>",
-    "Selesai dalam {time} detik."
+    "Congratulations, every ring is aligned.",
+    "Your secret code: <b>ABC-1234</b>",
+    "Finished in {time} seconds."
   ],
-  successButton: "Main lagi",
+  successButton: "Play again",
   successRedirect: "",    // isi URL untuk pindah halaman otomatis setelah menang
   successDelayMs: 2500,
 
   // Teks saat GAGAL
-  failTitle: "Gagal",
-  failTimeout: "Waktu habis.",
-  failWrong: "Masih ada titik yang belum berada di blok warna yang sama.",
-  failButton: "Coba lagi",
+  failTitle: "Failed",
+  failTimeout: "Time is up.",
+  failWrong: "Some dots are not under a block of the same color.",
+  failButton: "Try again",
 
   // Dipanggil saat berhasil (mis. kirim ke server-mu)
   onSuccess(totalSeconds){ }
@@ -114,15 +111,11 @@ const BLOCK_OFF = 30;  // jarak blok warna dari jalur titik (px)
 const BLOCK_W = 10;    // tebal blok warna
 const BLOCK_GAP = 6;   // celah antar blok yang bersebelahan (px)
 
-$("title").textContent = CONFIG.title;
-document.title = CONFIG.title;
 $("help").textContent = CONFIG.help;
 
 let state = "idle", rings = [], cur = 0, startT = 0, flash = null, shake = 0;
 let dir = 0, lastDir = 0, nextStep = 0;
 let keys = {left:false,right:false};
-let best = Number(localStorage.getItem("mg_best3")||0) || null;
-if (best) $("sBest").textContent = best.toFixed(2);
 
 const mod = a => ((a % S) + S) % S;
 const rndInt = n => Math.floor(Math.random()*n);
@@ -217,7 +210,6 @@ function start(){
   $("overlay").classList.remove("show");
   rings = CONFIG.dotsPerRing.map((_,k) => buildRing(k));
   cur = 0; state = "playing"; startT = performance.now(); lastDir = 0;
-  $("sRing").textContent = `1/${RINGS}`;
 }
 
 function confirmRing(){
@@ -227,7 +219,6 @@ function confirmRing(){
     rings[cur].done = true;
     cur++;
     if (cur>=RINGS) return end(true);
-    $("sRing").textContent = `${cur+1}/${RINGS}`;
   } else if (CONFIG.failOnWrong){
     end(false, CONFIG.failWrong);
   } else shake = performance.now();
@@ -241,7 +232,6 @@ function end(win, reason){
     $("oTitle").textContent = CONFIG.successTitle;
     $("oBody").innerHTML = CONFIG.successLines.map(l=>`<p>${l.replace("{time}",total.toFixed(2))}</p>`).join("");
     $("oBtn").textContent = CONFIG.successButton;
-    if(!best||total<best){best=total;localStorage.setItem("mg_best3",total);$("sBest").textContent=total.toFixed(2);}
     try{CONFIG.onSuccess(total);}catch(e){console.error(e);}
     if (CONFIG.successRedirect) setTimeout(()=>{location.href=CONFIG.successRedirect;},CONFIG.successDelayMs);
   } else {
@@ -350,10 +340,9 @@ function loop(now){
 (function init(){
   rings = CONFIG.dotsPerRing.map((_,k) => buildRing(k));
   $("overlay").className="overlay show";
-  $("oTitle").textContent=CONFIG.title;
-  $("oBody").innerHTML="<p>Siap?</p>";
+  $("oTitle").textContent="";
+  $("oBody").innerHTML="<p>Ready?</p>";
   $("oBtn").textContent=CONFIG.startButton;
-  $("sRing").textContent=`0/${RINGS}`;
   requestAnimationFrame(loop);
 })();
 </script>
