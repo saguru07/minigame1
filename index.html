@@ -68,11 +68,15 @@ const CONFIG = {
   totalSeconds: 30,               // batas waktu seluruh permainan
   failOnWrong: true,              // true: ENTER salah = gagal. false: hanya getar, boleh coba lagi
   colors: ["#ffc107", "#2196f3", "#d81b60"],
+  earlyThreeColorChance: 0.5, // peluang cincin 1 & 2 juga langsung punya 3 warna berbeda (0 = tidak pernah, 1 = selalu)
+  minColorsFromRing3: 3,  // mulai cincin ke-3, jumlah warna berbeda minimal (maks = jumlah warna di atas)
 
   // Papan & pengacakan (semuanya diacak ulang setiap game dimulai)
   spokes: 12,             // jumlah garis keluar (spoke). Titik & blok warna selalu menempel di garis ini
   stepDelayFirst: 220,    // jeda (ms) sebelum putaran berulang saat tombol ditahan
   stepDelayRepeat: 80,    // kecepatan putaran berulang (ms per langkah)
+  manyDotsChance: 0.5,    // peluang cincin ke-4 & ke-5 memakai banyak titik (0 = tidak pernah, 1 = selalu)
+  manyDotsRange: [7, 9],  // jumlah titik jika peluang di atas terpilih: [minimal, maksimal]
   maxCoverage: 0.55,      // maks bagian cincin yang boleh tertutup blok warna (0.55 = sisanya selalu kosong)
   extendChance: 0.2,      // peluang blok warna memanjang ke garis kosong di sebelahnya
   startPickTop: 0.25,     // 0.1 = posisi awal selalu yang terjauh dari tujuan, 1 = acak penuh
@@ -83,6 +87,7 @@ const CONFIG = {
   successLines: [
     "Congratulations, every ring is aligned.",
     "Your secret code: <b>ABC-1234</b>",
+    "Finished in {time} seconds."
   ],
   successButton: "Play again",
   successRedirect: "",    // isi URL untuk pindah halaman otomatis setelah menang
@@ -149,36 +154,31 @@ function slotDist(own, x, color){
 }
 
 function buildRing(k){
-  const cap = Math.max(2, Math.floor(S*CONFIG.maxCoverage));   // maks slot yang boleh berwarna
-  const n = Math.min(CONFIG.dotsPerRing[k], cap);
+  let n = CONFIG.dotsPerRing[k];
+  // cincin ke-4 dan ke-5: ada peluang jumlah titik jauh lebih banyak (acak antara min & maks)
+  if (k >= 3 && Math.random() < CONFIG.manyDotsChance){
+    const [lo, hi] = CONFIG.manyDotsRange;
+    n = lo + rndInt(hi - lo + 1);
+  }
+  n = Math.min(n, S);
+  const cap = Math.max(2, n, Math.floor(S*CONFIG.maxCoverage));   // maks slot yang boleh berwarna
   const r = {rad:R_STEP*(k+1), pos:0, vis:0, dots:[], own:Array(S).fill(null), done:false};
   const solvedPos = rndInt(S);
 
   // warna titik acak (minimal 2 warna berbeda), di slot spoke acak
+  // cincin 1-2: tepat 3 warna dengan peluang earlyThreeColorChance, selain itu tepat 2 warna;
+  // mulai cincin ke-3: selalu minimal 3 warna berbeda
+  const want = k >= 2 ? CONFIG.minColorsFromRing3 : (Math.random() < CONFIG.earlyThreeColorChance ? 3 : 2);
+  const minColors = Math.min(want, n, CONFIG.colors.length);
   let cols;
   do { cols = Array.from({length:n}, () => pick(CONFIG.colors)); }
-  while (new Set(cols).size < Math.min(2, CONFIG.colors.length));
+  while (k >= 2 ? new Set(cols).size < minColors : new Set(cols).size !== minColors);
   const slots = shuffle([...Array(S).keys()]).slice(0,n);
   slots.forEach((s,i) => r.dots.push({slot:s, color:cols[i]}));
 
   // klaim slot tujuan tiap titik
   const own = r.own;
   r.dots.forEach(d => own[mod(d.slot+solvedPos)] = d.color);
-
-  // pastikan tiap blok minimal 2 slot (panjang > 0), blok sendirian diperpanjang atau digabung
-  for (let guard=0; guard<200; guard++){
-    const single = runsOf(own).find(u => u.len===1 && !u.full);
-    if (!single) break;
-    const a = single.s, L = mod(a-1), R = mod(a+1);
-    if (own[L]===null && own[R]===null) own[Math.random()<.5?L:R] = single.color;
-    else if (own[L]===null) own[L] = single.color;
-    else if (own[R]===null) own[R] = single.color;
-    else {
-      const nc = own[L];
-      r.dots.forEach(d => { if (mod(d.slot+solvedPos)===a) d.color = nc; });
-      own[a] = nc;
-    }
-  }
 
   // blok memanjang acak (sewarna jadi satu blok panjang)
   for (let t=0; t<S; t++){
@@ -197,6 +197,7 @@ function buildRing(k){
     const ds = r.dots.map(d => slotDist(own, mod(d.slot+p), d.color));
     cand.push({p, score: Math.min(...ds) + 0.5*(ds.reduce((s,x)=>s+x,0)/ds.length)});
   }
+  if (new Set(r.dots.map(d => d.color)).size < minColors) return buildRing(k); // syarat jumlah warna tidak terpenuhi, buat ulang
   if (!cand.length) return buildRing(k); // jarang: semua posisi benar, buat ulang cincin
   cand.sort((x,y) => y.score-x.score);
   const top = Math.max(1, Math.ceil(cand.length*CONFIG.startPickTop));
