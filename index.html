@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minigame Cocokkan Warna</title>
+<style>
+  :root{
+    --bg:#10161c; --panel:#18222b; --ink:#e8eef3; --muted:#8a9aa8; --line:#2a3945; --ok:#4fd18b; --bad:#ff6b5e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:16px;
+  }
+  h1{font-size:1.25rem;margin:0;font-weight:700;letter-spacing:.2px}
+  .help{margin:0;color:var(--muted);font-size:.9rem;text-align:center;max-width:440px;line-height:1.5}
+  .stats{display:flex;gap:18px;font-variant-numeric:tabular-nums;font-size:.95rem}
+  .stats b{color:var(--ink)} .stats span{color:var(--muted)}
+  .stage{position:relative;width:min(92vw,420px);aspect-ratio:1}
+  canvas{width:100%;height:100%;display:block}
+  .bar{width:min(92vw,420px);height:8px;background:var(--panel);border-radius:4px;overflow:hidden}
+  .bar i{display:block;height:100%;width:100%;background:var(--ok);transform-origin:left}
+  .status{min-height:1.4em;font-size:.95rem;color:var(--muted)}
+  .overlay{
+    position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:10px;text-align:center;padding:28px;background:rgba(16,22,28,.93);border-radius:50%;
+  }
+  .overlay.show{display:flex}
+  .overlay h2{margin:0;font-size:1.3rem}
+  .overlay p{margin:0;color:var(--muted);font-size:.9rem;line-height:1.5}
+  .overlay.win h2{color:var(--ok)} .overlay.lose h2{color:var(--bad)}
+  button{
+    font:inherit;font-weight:700;color:#0b1015;background:var(--ink);border:0;border-radius:8px;
+    padding:10px 20px;cursor:pointer;margin-top:6px
+  }
+  button:focus-visible{outline:3px solid var(--ok);outline-offset:2px}
+  .touch{display:none;gap:10px}
+  .touch button{background:var(--panel);color:var(--ink);border:1px solid var(--line);margin:0;min-width:84px;user-select:none;touch-action:none}
+  @media (pointer:coarse){.touch{display:flex}}
+</style>
+</head>
+<body>
+
+<h1 id="title"></h1>
+<p class="help" id="help"></p>
+
+<div class="stats">
+  <div><span>Kunci</span> <b id="sLock">0/0</b></div>
+  <div><span>Waktu</span> <b id="sTime">0.00</b></div>
+  <div><span>Terbaik</span> <b id="sBest">-</b></div>
+</div>
+
+<div class="stage">
+  <canvas id="cv" width="840" height="840"></canvas>
+  <div class="overlay" id="overlay" role="alertdialog" aria-live="assertive">
+    <h2 id="oTitle"></h2>
+    <div id="oBody"></div>
+    <button id="oBtn"></button>
+  </div>
+</div>
+<div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+<div class="status" id="status" aria-live="polite"></div>
+
+<div class="touch">
+  <button id="tL">&larr;</button>
+  <button id="tOk">Konfirmasi</button>
+  <button id="tR">&rarr;</button>
+</div>
+
+<script>
+/* =====================================================================
+   PENGATURAN — ubah bagian ini saja untuk menyesuaikan game & teks
+   ===================================================================== */
+const CONFIG = {
+  // Teks halaman
+  title: "Minigame Cocokkan Warna",
+  help:  "Putar lingkaran titik dengan ← → (atau A / D) sampai titik di posisi atas sama warnanya dengan cincin luar. Tekan ENTER untuk konfirmasi. Tekan R untuk mulai ulang.",
+  startButton: "Mulai",
+
+  // Aturan game
+  locks: 5,              // jumlah kunci yang harus dibuka
+  secondsPerLock: 10,    // batas waktu tiap kunci (detik)
+  dotCount: 6,           // jumlah titik (maks sesuai jumlah warna di bawah)
+  rotateSpeed: 150,      // kecepatan putar (derajat/detik)
+  tolerance: 14,         // toleransi sejajar (derajat) — makin kecil makin sulit
+  colors: ["#ff5d5d", "#ffb347", "#f6e05e", "#4fd18b", "#4da3ff", "#b57cff"],
+
+  // Teks saat BERHASIL — susun sendiri.
+  // Tiap item array = satu baris/paragraf. Boleh pakai HTML sederhana (<b>, <a>, <br>).
+  successTitle: "Akses Terbuka!",
+  successLines: [
+    "Selamat, semua kunci berhasil dibuka.",
+    "Kode rahasiamu: <b>ABC-1234</b>",
+    "Selesai dalam {time} detik."        // {time} akan diganti waktu total
+  ],
+  successButton: "Main lagi",
+  successRedirect: "",   // isi URL (mis. "https://situsmu.com/hadiah") untuk pindah halaman otomatis
+  successDelayMs: 2500,  // jeda sebelum pindah halaman
+
+  // Teks saat GAGAL
+  failTitle: "Gagal",
+  failTimeout: "Waktu habis.",
+  failWrong:   "Warna tidak cocok.",
+  failMisalign:"Titik belum sejajar di posisi atas.",
+  failButton: "Coba lagi",
+
+  // Hook opsional: dipanggil saat berhasil (mis. kirim data ke server-mu)
+  onSuccess(totalSeconds){ /* contoh: fetch('/api/win',{method:'POST'}) */ }
+};
+/* ===================================================================== */
+
+const $ = id => document.getElementById(id);
+const cv = $("cv"), ctx = cv.getContext("2d");
+const W = cv.width, C = W/2;
+const TAU = Math.PI*2, TOP = -Math.PI/2;
+
+$("title").textContent = CONFIG.title;
+document.title = CONFIG.title;
+$("help").textContent = CONFIG.help;
+
+let state = "idle";            // idle | playing | over
+let lockIdx = 0, rot = 0, target = null, dots = [];
+let lockStart = 0, totalStart = 0, flash = null;
+let keys = {left:false,right:false};
+let best = Number(localStorage.getItem("mg_best") || 0) || null;
+if (best) $("sBest").textContent = best.toFixed(2);
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]} return a; }
+
+function newLock(){
+  const n = Math.min(CONFIG.dotCount, CONFIG.colors.length);
+  dots = shuffle(CONFIG.colors.slice(0,n));
+  target = dots[Math.floor(Math.random()*n)];
+  rot = Math.random()*TAU;
+  lockStart = performance.now();
+  $("sLock").textContent = `${lockIdx+1}/${CONFIG.locks}`;
+  $("status").textContent = "";
+}
+
+function start(){
+  $("overlay").classList.remove("show");
+  lockIdx = 0; state = "playing";
+  totalStart = performance.now();
+  newLock();
+}
+
+function dotAngle(i){ return rot + i*TAU/dots.length; }
+function norm(a){ a%=TAU; if(a>Math.PI)a-=TAU; if(a<-Math.PI)a+=TAU; return a; }
+
+function confirmPick(){
+  if (state !== "playing") return;
+  // cari titik terdekat dengan penanda di atas
+  let bi=-1, bd=Infinity;
+  for(let i=0;i<dots.length;i++){
+    const d = Math.abs(norm(dotAngle(i)-TOP));
+    if(d<bd){bd=d;bi=i}
+  }
+  const tol = CONFIG.tolerance*Math.PI/180;
+  if (bd > tol) return end(false, CONFIG.failMisalign);
+  if (dots[bi] !== target) return end(false, CONFIG.failWrong);
+
+  flash = {t:performance.now(), ok:true};
+  lockIdx++;
+  if (lockIdx >= CONFIG.locks) return end(true);
+  newLock();
+}
+
+function end(win, reason){
+  state = "over";
+  const total = (performance.now()-totalStart)/1000;
+  const ov = $("overlay");
+  ov.className = "overlay show " + (win ? "win":"lose");
+  if (win){
+    $("oTitle").textContent = CONFIG.successTitle;
+    $("oBody").innerHTML = CONFIG.successLines
+      .map(l => `<p>${l.replace("{time}", total.toFixed(2))}</p>`).join("");
+    $("oBtn").textContent = CONFIG.successButton;
+    if (!best || total < best){ best = total; localStorage.setItem("mg_best", total); $("sBest").textContent = total.toFixed(2); }
+    try { CONFIG.onSuccess(total); } catch(e){ console.error(e); }
+    if (CONFIG.successRedirect) setTimeout(()=>{ location.href = CONFIG.successRedirect; }, CONFIG.successDelayMs);
+  } else {
+    $("oTitle").textContent = CONFIG.failTitle;
+    $("oBody").innerHTML = `<p>${reason}</p>`;
+    $("oBtn").textContent = CONFIG.failButton;
+  }
+  $("oBtn").focus();
+}
+
+$("oBtn").addEventListener("click", start);
+
+/* ---------- input ---------- */
+addEventListener("keydown", e=>{
+  const k = e.key.toLowerCase();
+  if (k==="arrowleft"||k==="a") keys.left = true;
+  else if (k==="arrowright"||k==="d") keys.right = true;
+  else if (k==="enter" && state==="playing"){ e.preventDefault(); confirmPick(); }
+  else if (k==="r") start();
+});
+addEventListener("keyup", e=>{
+  const k = e.key.toLowerCase();
+  if (k==="arrowleft"||k==="a") keys.left = false;
+  if (k==="arrowright"||k==="d") keys.right = false;
+});
+function hold(id, side){
+  const b = $(id);
+  b.addEventListener("pointerdown", e=>{ e.preventDefault(); keys[side]=true; });
+  ["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,()=>keys[side]=false));
+}
+hold("tL","left"); hold("tR","right");
+$("tOk").addEventListener("click", confirmPick);
+
+/* ---------- gambar ---------- */
+function draw(){
+  ctx.clearRect(0,0,W,W);
+  const R = C-24;
+
+  // cincin luar = warna target
+  ctx.lineWidth = 34;
+  ctx.strokeStyle = state==="idle" ? "#2a3945" : target;
+  ctx.beginPath(); ctx.arc(C,C,R-17,0,TAU); ctx.stroke();
+
+  // piringan dalam
+  ctx.fillStyle = "#18222b";
+  ctx.beginPath(); ctx.arc(C,C,R-44,0,TAU); ctx.fill();
+  ctx.strokeStyle = "#2a3945"; ctx.lineWidth = 2; ctx.stroke();
+
+  // titik-titik
+  const orbit = R-110;
+  for(let i=0;i<dots.length;i++){
+    const a = dotAngle(i);
+    const x = C+Math.cos(a)*orbit, y = C+Math.sin(a)*orbit;
+    ctx.fillStyle = dots[i];
+    ctx.beginPath(); ctx.arc(x,y,30,0,TAU); ctx.fill();
+  }
+
+  // penanda posisi atas
+  ctx.fillStyle = "#e8eef3";
+  ctx.beginPath();
+  ctx.moveTo(C, C-orbit-48); ctx.lineTo(C-13, C-orbit-72); ctx.lineTo(C+13, C-orbit-72);
+  ctx.closePath(); ctx.fill();
+
+  // kilatan sukses tiap kunci
+  if (flash){
+    const p = (performance.now()-flash.t)/350;
+    if (p>=1) flash=null; else {
+      ctx.strokeStyle = `rgba(79,209,139,${1-p})`; ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.arc(C,C,R+ p*10,0,TAU); ctx.stroke();
+    }
+  }
+}
+
+let last = performance.now();
+function loop(now){
+  const dt = Math.min(0.05,(now-last)/1000); last = now;
+  if (state==="playing"){
+    const dir = (keys.right?1:0)-(keys.left?1:0);
+    rot += dir*CONFIG.rotateSpeed*Math.PI/180*dt;
+
+    const left = CONFIG.secondsPerLock - (now-lockStart)/1000;
+    const frac = Math.max(0,left/CONFIG.secondsPerLock);
+    const bar = $("barFill");
+    bar.style.transform = `scaleX(${frac})`;
+    bar.style.background = frac<.3 ? "var(--bad)" : "var(--ok)";
+    $("sTime").textContent = ((now-totalStart)/1000).toFixed(2);
+    if (left<=0) end(false, CONFIG.failTimeout);
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// layar awal
+(function init(){
+  $("overlay").className = "overlay show";
+  $("oTitle").textContent = CONFIG.title;
+  $("oBody").innerHTML = "<p>Siap?</p>";
+  $("oBtn").textContent = CONFIG.startButton;
+  $("sLock").textContent = `0/${CONFIG.locks}`;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
